@@ -1,0 +1,188 @@
+close all; clear all; clc;
+
+
+%% DEGERLER
+
+% Receiver_sensitivity = 3.1623e-09; % Rx. power requirement of the M.S
+R_sens_dbm=-85; % alıcı hassasiyeti -96 yazıyor katalogta
+Ptx_dbm=0; % verici gücü 0 dB
+Prx_dbm=0;
+distance = 1; % mesafe
+PL_exp=2;% Pathloss sabiti
+gaussian_constant=4; % gaussian sabiti
+d_ref=100; % reference distance
+c=3*10^8; % ısık hızı
+f=916*10^6; % frekans
+lambda=c/f; %dalga boyu
+data_rate= 250*10^3; 
+L_payload=128*8;
+LQI_range=255-0;
+
+% Ptx=1.0000e+4;
+
+counter=-1;
+% P_ch_fail = 1-ZunPhyModel(gaussian_constant, L_payload, data_rate);
+PL_ref_db=20*log10(4*pi*d_ref/lambda); % + X_ro
+X_ro = sqrt(gaussian_constant).*randn(1,1); %Gaussian white noise W
+Path_Loss_db=20*log10(4*pi*distance/lambda)+ X_ro/5; % PL HESABI *****************************************************
+
+batarya_RN_1=100; batarya_RN_2=100; batarya_RN_3=100;
+batarya_RN_4=100; batarya_RN_5=100; batarya_RN_6=100;
+batarya_CN=100; batarya_Tr=100; batarya_Rc=100;
+% Q_deger=zeros(1,1500);
+% Q=zeros(1,1500);
+
+
+%% PATH LOSS - RSSI
+
+for d=1:1:1000
+%     if R_sens_dbm<Prx_dbm
+
+X_ro = (sqrt(gaussian_constant).*randn(1,1)/5); %Gaussian white noise W
+PL_ref_db=abs(PL_ref_db);
+PL_db=abs(PL_ref_db+(PL_exp*10*log10(d/d_ref)));
+% PL_db=pow2db(abs(PL));
+counter=counter+1;
+Prx_dbm= Ptx_dbm-PL_db;
+% Ptx_dbm=Prx_dbm;
+RSSI_grafik(d)=-20*log10(4*pi*d/lambda);
+
+Q_deger(d)=((R_sens_dbm-(0-PL_db))/1);
+Q_deger_2(d)=((R_sens_dbm-(-3-PL_db))/1);
+Q_deger_3(d)=((R_sens_dbm-(3-PL_db))/1);
+Q(d) = qfunc(Q_deger(d));
+Q_2(d)=qfunc(Q_deger_2(d));
+Q_3(d)=qfunc(Q_deger_3(d));
+
+end
+
+for i=1:1:800;
+    PL_grafik(i)=-20*log10(4*pi*i/lambda);
+end
+figure();
+plot(PL_grafik,'r')
+    title( 'PL - distance graphic'); grid on;
+    xlabel('distance (m)'); ylabel('PL (dB)');  
+      
+% NR= (1-P_blocking)*(1-P_ch_fail)*(1-P_discard);
+% IT=L/M;
+
+
+%% BATARYA
+
+yol=1;
+yol_bayrak=0;
+
+for i=0:1:10000
+    
+    X_ro_1 = (sqrt(gaussian_constant).*randn(1,1)/100);
+    X_ro_2 = (sqrt(gaussian_constant).*randn(1,1)/100);
+    X_ro_3 = (sqrt(gaussian_constant).*randn(1,1)/100);
+    genel_batarya_1= batarya_RN_1 * batarya_RN_2 *batarya_RN_3/10000;
+    genel_batarya_2= batarya_RN_6 * batarya_RN_5 *batarya_RN_4/10000;
+
+if yol_bayrak==0 % 2 yolda kullanılabilir
+        if genel_batarya_1>=genel_batarya_2
+            yol=1;
+        else
+            yol=2;
+        end
+    
+    if yol==1;
+        batarya_RN_1=batarya_RN_1-0.1+X_ro_1;
+        batarya_RN_2=batarya_RN_2-0.1+X_ro_2;
+        batarya_RN_3=batarya_RN_3-0.1+X_ro_3;    
+        genel_batarya_1
+        if  (batarya_RN_1<0) || (batarya_RN_2<0) || (batarya_RN_3<0)
+            sprintf('1. yol kullanilamaz. \nRN_1:%d, \nRN_2:%d, \nRN_3:%d ',batarya_RN_1,batarya_RN_2,batarya_RN_3)
+            yol_bayrak=2;
+        end
+    else % yol 2 den devam et
+    
+        batarya_RN_6=batarya_RN_6-0.1+X_ro_1;
+        batarya_RN_5=batarya_RN_5-0.1+X_ro_2;
+        batarya_RN_4=batarya_RN_4-0.1+X_ro_3;       
+        genel_batarya_2
+        if  (batarya_RN_6<0) || (batarya_RN_5<0) || (batarya_RN_4<0)
+            sprintf('2. yol kullanilamaz. \nRN_6:%d, \nRN_5:%d, \nRN_4:%d ',batarya_RN_6,batarya_RN_5,batarya_RN_4)
+            yol_bayrak=1;
+        end  
+    end
+
+elseif yol_bayrak==1 %yol 2 kullanılamaz yol 1 den devam edilecek
+    batarya_RN_1=batarya_RN_1-0.1+X_ro_1;
+    batarya_RN_2=batarya_RN_2-0.1+X_ro_2;
+    batarya_RN_3=batarya_RN_3-0.1+X_ro_3;    
+    genel_batarya_1
+        if  (batarya_RN_1<0) || (batarya_RN_2<0) || (batarya_RN_3<0)
+            sprintf('1. yol kullanilamaz. \nRN_1:%d, \nRN_2:%d, \nRN_3:%d ',batarya_RN_1,batarya_RN_2,batarya_RN_3)
+            break
+        end
+    
+elseif yol_bayrak==2 %yol 1 kullanılamaz yol 2 den devam edilecek
+    batarya_RN_6=batarya_RN_6-0.1+X_ro_1;
+    batarya_RN_5=batarya_RN_5-0.1+X_ro_2;
+    batarya_RN_4=batarya_RN_4-0.1+X_ro_3;       
+    genel_batarya_2
+        if  (batarya_RN_6<0) || (batarya_RN_5<0) || (batarya_RN_4<0)
+            sprintf('2. yol kullanilamaz. \nRN_6:%d, \nRN_5:%d, \nRN_4:%d ',batarya_RN_6,batarya_RN_5,batarya_RN_4)
+            break
+        end      
+end
+end
+% batarya_ref=(batarya_RN_1-90)*10+X_ro;
+
+
+%% LQI - SQI
+
+if distance<5
+   
+    LQI=250;
+    
+elseif distance<10
+    
+    LQI=225;
+    
+elseif distance<20
+    
+    LQI=200;
+    
+elseif distance<50
+    
+    LQI=180;
+    
+elseif distance<100
+    
+    LQI=100;
+    
+end
+
+
+LQI_yuzdelik=LQI/LQI_range;
+LQI_guvenilirlik=(LQI/LQI_range)*100
+
+
+%% Q fonksiyonunu, Prx-RSSI grafiği çiz
+
+
+d=1:1:1000;
+figure(); plot (d,Q,'r'); 
+hold on; plot (d,Q_2,'g');
+plot (d,Q_3,'b'); grid on;
+    title( 'Probabilty of success - distance graphic');
+    xlabel('distance (m)'); ylabel('Probabilty of success');    
+    legend('0 dBm','-3 dBm','3 dBm');
+
+figure(); plot (d,RSSI_grafik,'r'); grid on;
+    title( 'RSSI - distance graphic');
+    xlabel('distance (m)'); ylabel('RSSI (dBm)');    
+        
+Prx_graphic=0:0.001:10; 
+for i=0:1:10
+RSSI=10*log10(Prx_graphic);
+end
+figure(); plot(Prx_graphic,RSSI); grid on;
+    title( 'Prx - RSSI graphic');
+    xlabel('Prx (mW)'); ylabel('RSSI (dBm)');    
+
+
