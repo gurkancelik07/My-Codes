@@ -1,0 +1,83 @@
+clear all; clc; close all;
+tic;
+h=1000; w=3600; 
+
+xLim = [0, w];
+yLim = [0, h];
+outputView = imref2d([h,w], xLim, yLim);
+okunan_video = vision.VideoFileReader('92.mp4', 'ImageColorSpace','RGB', 'PlayCount', 1);
+%
+halphablender = vision.AlphaBlender('Operation', 'Binary mask',...
+    'MaskSource', 'Input port');
+%
+hVideo1 = vision.VideoPlayer('Name', 'Corners');
+hVideo1.Position(1) = hVideo1.Position(1) - 350;
+%
+hVideo2 = vision.VideoPlayer('Name', 'Mosaic');
+hVideo2.Position(1) = hVideo1.Position(1) + 400;
+hVideo2.Position([3 4]) = [300 300];
+%
+points = cornerPoints(zeros(0, 2));
+features = binaryFeatures(zeros([0 64], 'uint8'));
+failedToMatchPoints = true; % 
+count=0;
+%
+while ~isDone(okunan_video)
+  % 
+  pointsPrev   = points;
+  featuresPrev = features;
+    
+        rgb = step(okunan_video);
+  
+    % 
+    I = rgb2gray(rgb);
+    % mosaic
+    corners = detectFASTFeatures(I);
+    % 
+    [features, points] = extractFeatures(I, corners);
+    % 
+    indexPairs = matchFeatures(features, featuresPrev);
+    % 
+    if size(indexPairs, 1) > 2
+        matchedPoints     = points(indexPairs(:, 1), :);
+        matchedPointsPrev = pointsPrev(indexPairs(:, 2), :);
+        
+        [tform, ~, ~, failedToMatchPoints] = estimateGeometricTransform(...
+            matchedPoints, matchedPointsPrev, 'affine');
+    end
+    if failedToMatchPoints
+        
+        xtform = eye(3);
+        mosaic = zeros(h, w, 3, 'single');
+    else
+       
+        xtform = xtform * tform.T;
+    end
+   
+    cornerImage = insertMarker(rgb, corners.Location, 'Color', 'red');
+    step(hVideo1, cornerImage);
+   
+    mask = imwarp(ones(size(I)), affine2d(xtform), 'OutputView', outputView) >= 1;
+    
+    transformedImage = imwarp(rgb, affine2d(xtform), 'OutputView', outputView);
+    mosaic = step(halphablender, mosaic, transformedImage, mask);
+    step(hVideo2, mosaic);
+    
+end
+%
+release(okunan_video);
+
+A = imread('TEST1.jpg');
+A = imresize(A,[1000 3600]);
+B = mosaic;
+B = imresize(B,[1000 3600]);
+E = imread('TEST2.jpg');
+E = imresize(E,[1000 3600]);
+F=rgb2gray(E);
+C=rgb2gray(A);
+D=rgb2gray(B);
+
+r = corr2(C,D);
+r2= corr2(F,D);
+
+toc;
